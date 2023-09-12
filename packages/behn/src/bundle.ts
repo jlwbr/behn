@@ -18,9 +18,8 @@ const bundleClient = () =>
 export const bundle = async () => {
   const client = await bundleClient();
 
-  if (!client.success) {
+  if (!client.success)
     throw new AggregateError(client.logs, "Build failed, bailing");
-  }
 
   const scripts: Script[] = [];
 

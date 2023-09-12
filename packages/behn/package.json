@@ -11,8 +11,7 @@
     "elysia": "latest",
     "glob": "^10.3.4",
     "htmx.org": "^1.9.5",
-    "hyperscript.org": "^0.9.11",
-    "nano-jsx": "^0.1.0"
+    "hyperscript.org": "^0.9.11"
   },
   "devDependencies": {
     "bun-types": "latest"

@@ -12,6 +12,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "nano-jsx": "^0.1.0"
+    "@elysiajs/html": "^0.6.5"
   }
 }

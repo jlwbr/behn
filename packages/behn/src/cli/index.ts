@@ -11,17 +11,21 @@ program.command("run").action(async () => {
   await app.initialRender();
   await app.startServer();
 
-  // console.log(
-  //   `🦊 Behn is running at ${app.server?.hostname}:${app.server?.port}`
-  // );
+  console.log(
+    `🦊 Behn is running at ${app.config.server.hostname}:${app.config.server.port}`
+  );
 });
 
-// program.command("").action(() => {
-//   const app = new Elysia().use(html()).use(bundle).listen(3000);
-//
-//   console.log(
-//     `🦊 Behn is running at ${app.server?.hostname}:${app.server?.port}`
-//   );
-// });
+program.command("dev").action(async () => {
+  const config = await readConfig()
+  const app = new App({ config })
+
+  await app.initialRender();
+  await app.startDevServer();
+
+  console.log(
+    `🦊 Behn is running at ${app.config.server.hostname}:${app.config.server.port}`
+  );
+});
 
 program.parse()

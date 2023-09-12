@@ -2,6 +2,7 @@ import { cwd } from "process";
 import { Script, bundle } from "./bundle";
 import { Config } from "./config";
 import path from "path";
+import fs from "node:fs";
 import {
   Layout,
   Metadata,
@@ -10,17 +11,25 @@ import {
   renderRoute,
   resolveLayout,
 } from "./router";
-import Elysia from "elysia";
-import html from "@elysiajs/html";
+import { Elysia } from "elysia";
+import { html } from "@elysiajs/html";
 
 const isComponent = (component: any) => typeof component === "function";
 
+enum Method {
+  GET = "GET",
+  POST = "POST",
+  PUT = "PUT",
+  DELETE = "DELETE",
+  PATCH = "PATCH",
+}
+
 export class App {
-  private config: Config;
+  public config: Config;
   private scripts: Script[] = [];
   private layouts: Map<string, Layout> = new Map();
   private routes: Map<
-    { url: string; method: string },
+    { url: string; method: Method },
     { component: () => any; metadata: Metadata }
   > = new Map();
 
@@ -51,30 +60,66 @@ export class App {
       if (!metadata.scripts) metadata.scripts = [];
       metadata.scripts.push(...this.scripts);
 
-      if (!metadata.layout) {
-        metadata.layout = resolveLayout(url, this.layouts);
+      if (!metadata.layouts) {
+        metadata.layouts = resolveLayout(url, this.layouts);
       }
 
-      if (isComponent(exports.GET)) {
-        this.routes.set(
-          { url, method: "GET" },
-          { component: exports.GET, metadata }
-        );
+      for (const method of Object.values(Method)) {
+        if (isComponent(exports[method])) {
+          this.routes.set(
+            { url, method },
+            { component: exports.GET, metadata }
+          );
+        }
       }
     }
+  }
+
+  async startDevServer() {
+    await this.startServer();
+
+    fs.watch(
+      path.join(cwd(), this.config.basePath),
+      {
+        recursive: true,
+      },
+      (event, filename) => {
+        console.log(event, filename)
+      }
+    );
   }
 
   async startServer() {
     const app = new Elysia().use(html());
 
     for (const [route, data] of this.routes) {
-      if (route.method === "GET") {
-        app.get(route.url, async ({ html, request }) => {
-          const isHX = request.headers.get("HX-Request") === "true";
-          const output = await renderRoute(data, isHX);
-
-          return html(output);
-        });
+      // TODO: Find a less repetitive way of doing this.
+      switch (route.method) {
+        case Method.GET:
+          app.get(
+            route.url,
+            async ({ request }) => await renderRoute(data, request)
+          );
+        case Method.POST:
+          app.post(
+            route.url,
+            async ({ request }) => await renderRoute(data, request)
+          );
+        case Method.PUT:
+          app.put(
+            route.url,
+            async ({ request }) => await renderRoute(data, request)
+          );
+        case Method.DELETE:
+          app.delete(
+            route.url,
+            async ({ request }) => await renderRoute(data, request)
+          );
+        case Method.PATCH:
+          app.patch(
+            route.url,
+            async ({ request }) => await renderRoute(data, request)
+          );
       }
     }
 
@@ -82,6 +127,6 @@ export class App {
       app.get(script.src, () => new Response(script.data));
     }
 
-    app.listen(3000);
+    app.listen(this.config.server);
   }
 }

@@ -5,5 +5,5 @@ export const metadata = {
 }
 
 export const GET = () => (
-  <p>Hey</p>
+  <p>Hey it m</p>
 )

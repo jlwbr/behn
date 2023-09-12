@@ -1,4 +1,4 @@
-import { h } from "nano-jsx";
+import '@elysiajs/html';
 
 const App = ({ children }: { children: any }) => (
   <html lang="en">
@@ -10,7 +10,10 @@ const App = ({ children }: { children: any }) => (
       />
     </head>
 
-    <body>{children}</body>
+    <body>
+      <p>Hey, im the main layout</p>
+      {children}
+    </body>
   </html>
 );
 

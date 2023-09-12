@@ -1,7 +1,6 @@
 import { Glob } from "glob";
 import { Script } from "./bundle";
 import path from "path";
-import { renderSSR } from "nano-jsx";
 
 export const getAllFiles = (basePath: string) => {
   const layouts = new Glob(`${basePath}/**/layout.{tsx,jsx,js,ts}`, {});
@@ -19,11 +18,12 @@ export const parseFile = async (basepath: string, file: string) => {
 };
 
 export type Layout = ({ children }: { children: any }) => any;
+export type Page = ({ request }: { request: Request }) => any;
 
 export type Metadata = {
   scripts: Script[];
   title?: string;
-  layout?: Layout;
+  layouts?: Layout[];
 };
 
 const rewriteHtml = (document: string, { scripts, title }: Metadata) => {
@@ -48,16 +48,19 @@ const rewriteHtml = (document: string, { scripts, title }: Metadata) => {
   return rewriter.transform(new Response(document));
 };
 
+const urlToParts = (url: string) => [
+  "/",
+  ...url.split("/").filter((url) => url),
+];
+
 export const resolveLayout = (url: string, layouts: Map<string, Layout>) => {
-  const urlParts = url.split("/");
-  const closestMatch: { matching: number; layout: Layout } = {
-    matching: 0,
-    layout: ({ children }) => children,
-  };
+  const urlParts = urlToParts(url);
+  const matches: Layout[] = [];
 
   const countMatching = (lhs: string[], rhs: string[]) => {
     let matching = 0;
 
+    if (rhs.length > lhs.length) return matching;
     for (const [i, url] of lhs.entries()) {
       if (i > rhs.length - 1) break;
 
@@ -69,23 +72,27 @@ export const resolveLayout = (url: string, layouts: Map<string, Layout>) => {
   };
 
   for (const [url, layout] of layouts) {
-    const matching = countMatching(urlParts, url.split("/"));
-    if (closestMatch.matching === matching)
-      throw Error("Only one layout is allowed per route");
-    if (closestMatch.matching < matching) {
-      closestMatch.matching = matching;
-      closestMatch.layout = layout;
-    }
+    const matching = countMatching(urlParts, urlToParts(url));
+    if (matching > 0) matches[matching] = layout;
   }
 
-  return closestMatch.layout;
+  return matches.filter(Boolean);
 };
 
-export const renderRoute = async ({ component, metadata }: { component: () => any, metadata: Metadata }, HXRequest: boolean = false) => {
-  const layout = metadata.layout;
+export const renderRoute = async (
+  { component, metadata }: { component: Page; metadata: Metadata },
+  request: Request
+) => {
+  const layouts = metadata.layouts;
+  const hxRequest = request.headers.get("HX-Request") === "true";
+  if (hxRequest) return rewriteHtml(component({ request }), metadata).text();
 
-  if (!layout) throw Error(`Missing layout`);
+  if (!layouts) throw Error(`Missing layout`);
 
-  const ssr = renderSSR(() => HXRequest ? component : layout({ children: component }));
-  return await rewriteHtml(ssr, metadata).text();
+  let finalLayout = component({ request });
+  for (const layout of layouts.reverse()) {
+    finalLayout = layout({ children: finalLayout });
+  }
+
+  return await rewriteHtml(finalLayout, metadata).text();
 };

@@ -3,10 +3,18 @@ import { cwd } from "process";
 
 export type Config = {
   basePath: string;
+  server: {
+    hostname: string;
+    port: number;
+  };
 };
 
 const defaultConfig: Config = {
   basePath: "src/app",
+  server: {
+    hostname: "localhost",
+    port: 3000,
+  },
 };
 
 export const readConfig = async () => {
