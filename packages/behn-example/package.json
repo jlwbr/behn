@@ -1,0 +1,17 @@
+{
+  "name": "behn-example",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "scripts": {
+    "start": "behn run"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "nano-jsx": "^0.1.0"
+  }
+}
