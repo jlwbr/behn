@@ -12,11 +12,12 @@
     "downlevelIteration": true,
     "skipLibCheck": true,
     "jsx": "react",
-    "jsxFactory": "ElysiaJSX",
-    "jsxFragmentFactory": "ElysiaJSX.Fragment",
+    "jsxFactory": "Html.createElement",
+    "jsxFragmentFactory": "Html.Fragment",
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
+    "plugins": [{ "name": "@kitajs/ts-html-plugin" }],
     "types": [
       "bun-types" // add Bun global
     ]

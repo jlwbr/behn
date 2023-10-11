@@ -1,17 +1,24 @@
 {
   "name": "behn",
-  "version": "1.0.50",
+  "version": "1.1.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts"
   },
+  "main": "index.ts",
   "dependencies": {
     "@elysiajs/html": "^0.6.4",
+    "@kitajs/html": "^2.2.2",
+    "@kitajs/ts-html-plugin": "^1.0.1",
+    "chokidar": "^3.5.3",
     "commander": "^11.0.0",
+    "diff-dom": "^5.0.7",
     "elysia": "latest",
     "glob": "^10.3.4",
     "htmx.org": "^1.9.5",
-    "hyperscript.org": "^0.9.11"
+    "hyperscript.org": "^0.9.11",
+    "typescript": "^5.2.2",
+    "valibot": "^0.19.0"
   },
   "devDependencies": {
     "bun-types": "latest"

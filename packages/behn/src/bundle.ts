@@ -2,32 +2,32 @@ import { extname, join } from "path";
 import Bun, { BuildArtifact } from "bun";
 
 export type Script = {
-  src: string;
   data: BuildArtifact;
 };
 
 const clientEntry = await import.meta.resolve("./client/main.ts");
+const hmr = await import.meta.resolve("./client/hotreload.ts");
 
-const bundleClient = () =>
-  Bun.build({
-    entrypoints: [clientEntry],
+export const bundle = async ({ devMode }: { devMode: boolean }) => {
+  const entrypoints = [clientEntry];
+  if (devMode) entrypoints.push(hmr);
+
+  const client = await Bun.build({
+    entrypoints,
     splitting: true,
     minify: true,
+    sourcemap: devMode ? "inline" : "none",
   });
-
-export const bundle = async () => {
-  const client = await bundleClient();
 
   if (!client.success)
     throw new AggregateError(client.logs, "Build failed, bailing");
 
-  const scripts: Script[] = [];
+  const scripts: Map<string, Script> = new Map();
 
   for (const output of client.outputs) {
-    const extension = extname(output.path);
-    const path = join(".htmx", `${output.hash}${extension}`);
+    const path = join("/.htmx/scripts", `${output.path}`);
 
-    scripts.push({ src: path, data: output });
+    scripts.set(path, { data: output });
   }
 
   return { client: scripts };

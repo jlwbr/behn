@@ -1,13 +1,16 @@
 import { glob } from "glob";
 import { cwd } from "process";
+import { Output, number, object, parse, string } from "valibot";
 
-export type Config = {
-  basePath: string;
-  server: {
-    hostname: string;
-    port: number;
-  };
-};
+const ConfigSchema = object({
+  basePath: string(),
+  server: object({
+    hostname: string(),
+    port: number(),
+  }),
+});
+
+export type Config = Output<typeof ConfigSchema>;
 
 const defaultConfig: Config = {
   basePath: "src/app",
@@ -29,5 +32,5 @@ export const readConfig = async () => {
 
   if (!data.config) throw new Error("Missing config export, bailing");
 
-  return Object.assign({}, defaultConfig, data.config);
+  return parse(ConfigSchema, Object.assign({}, defaultConfig, data.config));
 };
