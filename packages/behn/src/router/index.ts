@@ -28,11 +28,12 @@ export enum Method {
 
 export class Router {
   private scripts: Map<string, Script> = new Map();
-  public layouts: Map<string, { file: string; layout: Layout }> = new Map();
+  public layouts: Tree<{ path: string; file: string; layout: Layout }> =
+    new Tree();
   private routesByLayout: Map<string, string[]> = new Map();
   public modules: Map<string, { type: "layout" | "route"; file: string }> =
     new Map();
-  private modulesByFile: Map<string, readonly string[]> = new Map();
+  private modulesByFile: Map<string, string[]> = new Map();
   public routes: {
     [pathname: string]: {
       [method in Method]: { component: Page; metadata: Metadata };
@@ -99,8 +100,21 @@ export class Router {
     if (!exports.default)
       throw new Error(`Layout at ${file} missing default export`);
 
-    this.layouts.set(url, { file, layout: exports.default });
+    const urlparts = urlToParts(url);
+    const layout = {
+      path: urlparts[urlparts.length - 1],
+      file,
+      layout: exports.default,
+    };
 
+    this.layouts.update_or_add_at_location(
+      layout,
+      urlparts,
+      (value, pathspec) => value.path === pathspec,
+      (target) => target.path === layout.path,
+    );
+
+    // console.dir(this.layouts, { depth: null });
     const routes = this.routesByLayout.get(file);
     if (!routes) return;
 
