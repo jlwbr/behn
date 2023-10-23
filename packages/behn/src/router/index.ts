@@ -18,7 +18,7 @@ import { Tree } from "../utils/tree";
 
 const isComponent = (component: any) => typeof component === "function";
 
-enum Method {
+export enum Method {
   GET = "GET",
   POST = "POST",
   PUT = "PUT",

@@ -2,9 +2,32 @@
 
 import { program } from "commander";
 import { readConfig } from "../config";
-import { Router } from "../router";
+import { Method, Router } from "../router";
 import { join } from "path";
 import { cwd } from "process";
+import { renderRoute } from "../router/utils";
+
+program.command("benchmark").action(async () => {
+  const time = performance.now();
+
+  const config = await readConfig();
+  const router = new Router({ basePath: join(cwd(), config.basePath) });
+
+  await router.addAll();
+
+  for (const [url, route] of Object.entries(router.routes)) {
+    await renderRoute(
+      route[Method.GET],
+      new Request(new URL(`http://localhost/${url}`), { method: "GET" }),
+    );
+  }
+
+  const finish = performance.now();
+
+  console.log(
+    `⏲️ RRendering all paths and methods took: ${finish - time} miliseconds`,
+  );
+});
 
 program.command("run").action(async () => {
   const config = await readConfig();
