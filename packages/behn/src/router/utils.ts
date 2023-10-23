@@ -3,6 +3,8 @@ import { Script } from "./../bundle";
 import path from "path";
 import Html from "@kitajs/html";
 import { traceImports } from "../utils/traceImports";
+import debug from "../utils/debug";
+import { Node, Tree } from "../utils/tree";
 
 export const getAllFiles = (basePath: string) => {
   const layouts = new Glob(`${basePath}/**/layout.{tsx,jsx,js,ts}`, {});

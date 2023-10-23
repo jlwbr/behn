@@ -4,15 +4,17 @@ import {
   Layout,
   Metadata,
   Page,
-  clearCache,
   getAllFiles,
   parseFile,
   renderRoute,
   resolveLayout,
+  urlToParts,
 } from "./utils";
 import { Server } from "bun";
 import { cwd } from "process";
 import { parse, join } from "path";
+import debug from "../utils/debug";
+import { Tree } from "../utils/tree";
 
 const isComponent = (component: any) => typeof component === "function";
 
@@ -56,11 +58,7 @@ export class Router {
     this.server = server;
   }
 
-  updateModules(
-    file: string,
-    type: "layout" | "route",
-    imports: readonly string[],
-  ) {
+  updateModules(file: string, type: "layout" | "route", imports: string[]) {
     const currentModules = this.modulesByFile.get(file);
 
     if (currentModules) {

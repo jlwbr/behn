@@ -1,0 +1,16 @@
+/// <reference types="@kitajs/html/htmx.d.ts" />
+
+import "@kitajs/html/register";
+import type { Layout } from "behn";
+
+const App: Layout = ({ children }) => (
+  <html lang="en">
+    <head>
+      <title>New {{ name }} app</title>
+    </head>
+
+    <body>{children}</body>
+  </html>
+);
+
+export default App;
