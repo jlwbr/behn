@@ -21,9 +21,16 @@ export const parseFile = async (basepath: string, file: string) => {
   const exports = require(file);
   const parsedPath = path.parse(file);
   const url = parsedPath.dir.replace(basepath, "");
-  const imports = traceImports(file);
+  const imports = await traceImports(file, 10);
 
-  return { url: url.length === 0 ? "/" : url, exports, imports };
+  debug("Parsed file %s, url: %s", file, url);
+
+  return {
+    url: url.length === 0 ? "/" : url,
+    exports,
+    imports,
+    lastModified: new Date(Bun.file(file).lastModified),
+  };
 };
 
 type MabyAsync<T> = T | Promise<T>;
@@ -35,20 +42,20 @@ export type Layout = ({
 }) => MabyAsync<string>;
 export type Page = ({
   request,
+  headers,
 }: {
   request: Request;
+  headers: Headers;
 }) => MabyAsync<string | Response>;
 
 export type Metadata = {
   scripts: Map<string, Script>;
   title?: string;
   layouts?: Layout[];
+  lastModified: Date;
 };
 
-const rewriteHtml = (
-  document: string | Response,
-  { scripts, title }: Metadata,
-) => {
+const rewriteHtml = (document: Response, { scripts, title }: Metadata) => {
   const rewriter = new HTMLRewriter();
   const htmlString = [...scripts.entries()]
     .map(([src, script]) => {
@@ -76,65 +83,89 @@ const rewriteHtml = (
     },
   });
 
-  return rewriter.transform(
-    typeof document === "string"
-      ? new Response(document, {
-          headers: {
-            "Content-Type": "text/html",
-          },
-        })
-      : document,
-  );
+  return rewriter.transform(document);
 };
 
-const urlToParts = (url: string) => [
+export const urlToParts = (url: string) => [
   "/",
   ...url.split("/").filter((url) => url),
 ];
 
 export const resolveLayout = (
   url: string,
-  layouts: Map<string, { file: string; layout: Layout }>,
+  layouts: Tree<{ path: string; file?: string; layout?: Layout }>,
 ) => {
   const urlParts = urlToParts(url);
+  urlParts.shift();
+
+  let node = layouts.root;
+  for (const part of urlParts) {
+    const newNode = node?.children.find((node) => node.value.path === part);
+
+    if (!newNode) break;
+
+    node = newNode;
+  }
+
   const matches: Layout[] = [];
   const urls: string[] = [];
 
-  const countMatching = (lhs: string[], rhs: string[]) => {
-    let matching = 0;
+  while (node) {
+    const { file, layout } = node.value;
 
-    if (rhs.length > lhs.length) return matching;
-    for (const [i, url] of lhs.entries()) {
-      if (i > rhs.length - 1) break;
+    if (!layout || !file) break;
 
-      if (url === rhs[i]) matching++;
-      else break;
-    }
+    matches.push(layout);
+    urls.push(file);
 
-    return matching;
-  };
-
-  for (const [url, layout] of layouts) {
-    const matching = countMatching(urlParts, urlToParts(url));
-    if (matching > 0) {
-      urls[matching] = layout.file;
-      matches[matching] = layout.layout;
-    }
+    node = node.parent;
   }
 
   return { layouts: matches.filter(Boolean), urls: urls.filter(Boolean) };
+};
+
+const initResponse = ({
+  finalLayout,
+  headers,
+}: {
+  finalLayout: string | Response;
+  headers: Headers;
+}) => {
+  if (typeof finalLayout === "string") {
+    headers.set("Content-Type", "text/html");
+    return new Response(finalLayout, {
+      headers,
+    });
+  } else {
+    headers.forEach((val, key) => {
+      if (!finalLayout.headers.get(key)) {
+        finalLayout.headers.set(key, val);
+      }
+    });
+
+    return finalLayout;
+  }
 };
 
 export const renderRoute = async (
   { component, metadata }: { component: Page; metadata: Metadata },
   request: Request,
 ) => {
+  const headers = new Headers({
+    "Last-Modified": metadata.lastModified.toUTCString(),
+    Vary: "HX-Request",
+  });
   const layouts = metadata.layouts;
-  let finalLayout = await component({ request });
+  let finalLayout = await component({ request, headers });
+
   const skipLayout =
     request.headers.get("HX-Request") === "true" ||
     typeof finalLayout !== "string";
-  if (skipLayout) return rewriteHtml(finalLayout, metadata);
+
+  if (skipLayout) {
+    const response = initResponse({ finalLayout, headers });
+    return rewriteHtml(response, metadata);
+  }
 
   if (!layouts || layouts.length === 0) throw Error(`Missing layout`);
 
@@ -142,5 +173,6 @@ export const renderRoute = async (
     finalLayout = await layout({ children: finalLayout as string });
   }
 
-  return rewriteHtml(finalLayout, metadata);
+  const response = initResponse({ finalLayout, headers });
+  return rewriteHtml(response, metadata);
 };

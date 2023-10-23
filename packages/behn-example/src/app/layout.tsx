@@ -1,19 +1,16 @@
-import '@elysiajs/html';
+/// <reference types="@kitajs/html/htmx.d.ts" />
 
-const App = ({ children }: { children: any }) => (
+import "@kitajs/html/register";
+import type { Layout } from "behn";
+
+const App: Layout = ({ children }) => (
   <html lang="en">
     <head>
-      <title>Nano JSX SSR</title>
-      <meta
-        name="description"
-        content="Server Side Rendered Nano JSX Application"
-      />
+      <title>Behn example</title>
+      <script src="https://cdn.tailwindcss.com"></script>
     </head>
 
-    <body>
-      <p>Hey, im the main layout</p>
-      {children}
-    </body>
+    <body>{children}</body>
   </html>
 );
 

@@ -20,10 +20,10 @@ function connect() {
   socket.addEventListener("message", async (event) => {
     const currentUrl = new URL(window.location.href);
     const urls: string[] = JSON.parse(event.data);
-    const url = urls.find((url) => url === currentUrl.pathname);
+    const url = urls.some((url) => url === currentUrl.pathname);
     if (!url) return;
 
-    const newDocument = await fetch(url).then(async (data) =>
+    const newDocument = await fetch(currentUrl).then(async (data) =>
       new DOMParser().parseFromString(await data.text(), "text/html"),
     );
 

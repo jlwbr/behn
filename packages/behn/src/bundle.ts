@@ -1,12 +1,29 @@
-import { extname, join } from "path";
+import { join } from "path";
 import Bun, { BuildArtifact } from "bun";
 
 export type Script = {
   data: BuildArtifact;
 };
 
-const clientEntry = await import.meta.resolve("./client/main.ts");
-const hmr = await import.meta.resolve("./client/hotreload.ts");
+const clientEntry = import.meta.resolveSync("./client/main.ts");
+const hmr = import.meta.resolveSync("./client/hotreload.ts");
+
+export const bundleServerFile = async ({
+  file,
+  devMode,
+}: {
+  file: string;
+  devMode: boolean;
+}) =>
+  await Bun.build({
+    entrypoints: [file],
+    splitting: false,
+    target: "bun",
+    minify: !devMode,
+    sourcemap: devMode ? "inline" : "none",
+    outdir: ".behn",
+    naming: "[dir]/[name]-[hash].[ext]"
+  });
 
 export const bundle = async ({ devMode }: { devMode: boolean }) => {
   const entrypoints = [clientEntry];
@@ -15,7 +32,7 @@ export const bundle = async ({ devMode }: { devMode: boolean }) => {
   const client = await Bun.build({
     entrypoints,
     splitting: true,
-    minify: true,
+    minify: !devMode,
     sourcemap: devMode ? "inline" : "none",
   });
 

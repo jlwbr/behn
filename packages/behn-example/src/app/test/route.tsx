@@ -1,9 +1,3 @@
-import '@elysiajs/html';
+import { Page } from "behn";
 
-export const metadata = {
-  title: 'Test'
-}
-
-export const GET = () => (
-  <p>Hey it m</p>
-)
+export const get: Page = () => <p> Hoi </p>;

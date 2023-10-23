@@ -1,10 +1,7 @@
-import "@elysiajs/html";
+import type { Layout } from "behn";
 
-const App = ({ children }: { children: any }) => (
-  <>
-    <p>Hey im a layout in test</p>
-    {children}
-  </>
+const Layout: Layout = ({ children }) => (
+  <div class="border-2 border-red-200">{children}</div>
 );
 
-export default App;
+export default Layout;

@@ -1,15 +1,23 @@
-# Elysia with Bun runtime
+# The Behn Framework
+
+A bazingly (tm) fast htmx Framework.
 
 ## Getting Started
-To get started with this template, simply paste this command into your terminal:
+
+For a basic template see ../behn-example
+
+To start the server run:
+
 ```bash
-bun create elysia ./elysia-example
+bun behn start
 ```
 
 ## Development
-To start the development server run:
-```bash
-bun run dev
-```
 
-Open http://localhost:3000/ with your browser to see the result.
+The Behn dev with hot reloading in the browser.
+
+To start the development server run:
+
+```bash
+bun behn dev
+```

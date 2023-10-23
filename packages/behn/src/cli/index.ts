@@ -22,7 +22,9 @@ program.command("run").action(async () => {
     },
   });
 
-  console.log(`🦊 Behn is running at ${server.hostname}:${server.port}`);
+  console.log(
+    `🦊 Behn is running at http://${server.hostname}:${server.port}/`,
+  );
 });
 
 program.command("dev").action(async () => {
@@ -61,7 +63,9 @@ program.command("dev").action(async () => {
 
   router.server = server;
   await router.watch();
-  console.log(`🦊 Behn is running at ${server.hostname}:${server.port}`);
+  console.log(
+    `🦊 Behn is running at http://${server.hostname}:${server.port}/`,
+  );
 });
 
 program.parse();

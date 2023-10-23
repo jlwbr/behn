@@ -1,50 +1,89 @@
+import { boolean } from "valibot";
+
 export class Node<T> {
-  public data: T;
+  public parent?: Node<T>;
+  public value: T;
   public children: Node<T>[];
 
   constructor(data: T) {
-    this.data = data;
+    this.value = data;
     this.children = [];
   }
 
-  add(data: T) {
-    this.children.push(new Node(data));
+  add(value: T) {
+    const node = new Node(value);
+    node.parent = this;
+    this.children.push(node);
+
+    return node;
   }
 
-  remove(data: T) {
+  remove(value: T) {
     this.children = this.children.filter((node) => {
-      return node.data !== data;
+      return node.value !== value;
     });
   }
 }
 
 export class Tree<T> {
-  public root: Node<T>;
+  public root?: Node<T>;
 
-  constructor(root: Node<T>) {
-    this.root = root;
+  constructor(root?: T) {
+    this.root = root ? new Node(root) : undefined;
   }
 
-  BFS(cb: (node: Node<T>) => boolean) {
-    const arr = [this.root];
-    while (arr.length) {
-      const node = arr.shift();
-      if (!node) return;
+  update_or_add_at_location<Y>(
+    value: T,
+    pathspec: Y[],
+    compare_function: (value: T, pathspec: Y) => boolean,
+    target: (value: T) => boolean,
+  ) {
+    if (!this.root) {
+      this.root = compare_function(value, pathspec[0])
+        ? new Node(value)
+        : undefined;
 
-      const prune = cb(node);
+      return;
+    }
 
-      if (!prune) arr.push(...node.children);
+    let current_node = this.root;
+    pathspec.shift();
+
+    for (const part of pathspec) {
+      const child = current_node.children.find((node) =>
+        compare_function(node.value, part),
+      );
+
+      if (!child) break;
+      current_node = child;
+    }
+
+    if (target(current_node.value)) {
+      current_node.value = value;
+    } else {
+      current_node.add(value);
     }
   }
 
-  DFS(cb: (node: Node<T>) => void) {
+  BFS(prune: (value: T) => boolean, target: (value: T) => boolean) {
     const arr = [this.root];
     while (arr.length) {
       const node = arr.shift();
       if (!node) return;
 
-      arr.unshift(...node.children);
-      cb(node);
+      if (target(node.value)) return node;
+      if (!prune(node.value)) arr.push(...node.children);
+    }
+  }
+
+  DFS(prune: (value: T) => boolean, target: (value: T) => boolean) {
+    const arr = [this.root];
+    while (arr.length) {
+      const node = arr.shift();
+      if (!node) return;
+
+      if (target(node.value)) return node;
+      if (!prune(node.value)) arr.unshift(...node.children);
     }
   }
 }

@@ -83,12 +83,12 @@ export class Router {
 
     const files = getAllFiles(this.basePath);
 
-    for await (const file of files.layouts) {
-      this.addLayout(file);
+    for (const file of files.layouts) {
+      await this.addLayout(file);
     }
 
-    for await (const file of files.routes) {
-      this.addRoute(file);
+    for (const file of files.routes) {
+      await this.addRoute(file);
     }
   }
 
@@ -112,7 +112,10 @@ export class Router {
   }
 
   async addRoute(file: string) {
-    const { url, exports, imports } = await parseFile(this.basePath, file);
+    const { url, exports, imports, lastModified } = await parseFile(
+      this.basePath,
+      file,
+    );
 
     console.log(`📼 Rendering route: ${url}`);
 
@@ -121,6 +124,7 @@ export class Router {
     const metadata = (exports.metadata || {}) as Metadata;
     if (!metadata.scripts) metadata.scripts = new Map();
     metadata.scripts = new Map([...metadata.scripts, ...this.scripts]);
+    metadata.lastModified = this.devMode ? new Date() : lastModified;
 
     const { urls, layouts } = resolveLayout(url, this.layouts);
 
@@ -136,6 +140,11 @@ export class Router {
     for (const method of Object.values(Method)) {
       if (isComponent(exports[method])) {
         this.routes[url][method] = { component: exports[method], metadata };
+      } else if (isComponent(exports[method.toLowerCase()])) {
+        this.routes[url][method] = {
+          component: exports[method.toLowerCase()],
+          metadata,
+        };
       }
     }
 
@@ -145,6 +154,7 @@ export class Router {
   notifyHMR() {
     if (!this.devMode) return;
 
+    debug("Got hot reload request for urls: %o", this.updateQueue.values());
     this.server?.publish(
       "reload",
       JSON.stringify([...this.updateQueue.values()]),
@@ -176,11 +186,11 @@ export class Router {
     rest.on("change", async (file, stats) => {
       if (!stats?.isFile()) return;
 
+      debug("Module file changed", file);
       const parsed = parse(file);
       const basefile = this.modules.get(join(parsed.dir, parsed.name));
       if (!basefile) return;
-
-      clearCache(file);
+      debug("Found base file %s for module %s", basefile.file, file);
 
       switch (basefile.type) {
         case "layout":
@@ -195,12 +205,14 @@ export class Router {
     layouts.on("add", async (file, stats) => {
       if (!stats?.isFile()) return;
 
+      debug("New layout file added: %s", file);
       await this.addLayout(file);
       this.notifyHMR();
     });
     layouts.on("change", async (file, stats) => {
       if (!stats?.isFile()) return;
 
+      debug("Layout file changed", file);
       await this.addLayout(file);
       this.notifyHMR();
     });
@@ -208,12 +220,14 @@ export class Router {
     routes.on("add", async (file, stats) => {
       if (!stats?.isFile()) return;
 
+      debug("New routed file added: %s", file);
       await this.addRoute(file);
       this.notifyHMR();
     });
     routes.on("change", async (file, stats) => {
       if (!stats?.isFile()) return;
 
+      debug("Route file changed", file);
       await this.addRoute(file);
       this.notifyHMR();
     });

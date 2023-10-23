@@ -1,45 +1,50 @@
-import { builtinModules } from "module";
-import { parse, resolve, join } from "path";
+import { parse, join } from "path";
+import { clearCache } from "../router/utils";
+import { findStaticImports, resolvePath } from "mlly";
 
-import ts from "typescript";
+export function isDefined<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
 
-export function traceImports(fileName: string): readonly string[] {
-  const tsHost = ts.createCompilerHost(
-    {
-      allowJs: true,
-      noEmit: true,
-      isolatedModules: true,
-      resolveJsonModule: false,
-      incremental: true,
-      noLib: true,
-      noResolve: true,
-    },
-    true,
+async function getImportsForFile(file: string) {
+  const code = await Bun.file(file).text();
+  const imports = findStaticImports(code);
+
+  return (
+    await Promise.all(
+      imports.map(async (data) => {
+        const resolved = await resolvePath(data.specifier, {
+          url: file,
+          extensions: [".mjs", ".cjs", ".js", ".json", ".ts", ".tsx"],
+        });
+
+        return resolved;
+      }),
+    )
+  ).filter((path) => !path.includes("node") && !path.includes("node_modules"));
+}
+
+async function traceImportsRecursive(
+  file: string,
+  depth: number,
+): Promise<string[]> {
+  const imports = await getImportsForFile(file);
+  if (depth === 0) return imports;
+  const recursive = await Promise.all(
+    imports.map(async (i) => traceImportsRecursive(i, depth - 1)),
   );
 
-  const sourceFile = tsHost.getSourceFile(
-    fileName,
-    ts.ScriptTarget.Latest,
-    (msg) => {
-      throw new Error(`Failed to parse ${fileName}: ${msg}`);
-    },
-  );
-  if (!sourceFile) throw ReferenceError(`Failed to find file ${fileName}`);
-  const importing: string[] = [];
-  delintNode(sourceFile);
-  return importing.map((relative) => {
-    const parsed = parse(relative);
-    return resolve(parse(fileName).dir, join(parsed.dir, parsed.name));
+  return [...imports, ...recursive.flat()];
+}
+
+export async function traceImports(file: string, limit: number) {
+  const imports = await traceImportsRecursive(file, limit);
+
+  // NOTE: We should probably move this to a more sensible place
+  imports.forEach((file) => clearCache(file));
+
+  return imports.map((file) => {
+    const parsed = parse(file);
+    return join(parsed.dir, parsed.name);
   });
-
-  function delintNode(node: ts.Node) {
-    if (ts.isImportDeclaration(node)) {
-      const moduleName = node.moduleSpecifier.getText().replace(/['"]/g, "");
-      if (
-        !moduleName.startsWith("node:") &&
-        !builtinModules.includes(moduleName)
-      )
-        importing.push(moduleName);
-    } else ts.forEachChild(node, delintNode);
-  }
 }
