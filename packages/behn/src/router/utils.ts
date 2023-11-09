@@ -1,10 +1,12 @@
 import { Glob } from "glob";
-import { Script } from "./../bundle";
 import path from "path";
 import Html from "@kitajs/html";
 import { traceImports } from "../utils/traceImports";
 import debug from "../utils/debug";
-import { Node, Tree } from "../utils/tree";
+import { Tree } from "../utils/tree";
+import "@kitajs/html/register";
+import { BuildArtifact } from "bun";
+import { compileCss } from "../utils/postcss";
 
 export const getAllFiles = (basePath: string) => {
   const layouts = new Glob(`${basePath}/**/layout.{tsx,jsx,js,ts}`, {});
@@ -18,12 +20,50 @@ export const clearCache = (file: string) => {
   delete require.cache[require.resolve(file)];
 };
 
+async function sha256(message) {
+    // encode as UTF-8
+    const msgBuffer = new TextEncoder().encode(message);
+
+    // hash the message
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    
+    // convert ArrayBuffer to Array
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+    // convert bytes to hex string
+    const hashHex = hashArray.map(b => ('00' + b.toString(16)).slice(-2)).join('');
+    return hashHex;
+}
+
+
 export const parseFile = async (basepath: string, file: string) => {
   clearCache(file);
   const exports = require(file);
   const parsedPath = path.parse(file);
   const url = parsedPath.dir.replace(basepath, "");
   const imports = await traceImports(file, 10);
+  imports.forEach((file) => clearCache(file));
+
+  const buildAssets: BuildArtifact[] = [];
+
+  for (const asset of imports) {
+    const parsed = path.parse(asset);
+
+    switch (parsed.ext) {
+      case ".css":
+        const output = await compileCss({ path: asset });
+
+        const blob = new Blob([output], { type: "text/css" }) as BuildArtifact;
+
+        blob.kind = "asset";
+        blob.hash = await sha256(output);
+        blob.path = `${parsed.name}${parsed.ext}`;
+        blob.loader = "text";
+        blob.sourcemap = null;
+
+        buildAssets.push(blob);
+    }
+  }
 
   debug("Parsed file %s, url: %s", file, url);
 
@@ -31,6 +71,7 @@ export const parseFile = async (basepath: string, file: string) => {
     url: url.length === 0 ? "/" : url,
     exports,
     imports,
+    assets: buildAssets,
     lastModified: new Date(Bun.file(file).lastModified),
   };
 };
@@ -51,22 +92,22 @@ export type Page = ({
 }) => MabyAsync<string | Response>;
 
 export type Metadata = {
-  scripts: Map<string, Script>;
+  assets: Map<string, BuildArtifact>;
   title?: string;
   layouts?: Layout[];
   lastModified: Date;
 };
 
-const rewriteHtml = (document: Response, { scripts, title }: Metadata) => {
+const rewriteHtml = (document: Response, { assets, title }: Metadata) => {
   const rewriter = new HTMLRewriter();
-  const htmlString = [...scripts.entries()]
-    .map(([src, script]) => {
-      switch (script.data.kind) {
+  const htmlString = [...assets.entries()]
+    .map(([src, asset]) => {
+      switch (asset.kind) {
         case "entry-point":
-          return `<script type="module" src="${src}"></script>`;
         case "chunk":
-          return `<script type="module" src="${src}"></script>`;
+          return `<script type="module" src=".behn/assets/${src}"></script>`;
         case "asset":
+          return `<link rel="stylesheet" href=".behn/assets/${src}">`;
         case "sourcemap":
       }
     })
@@ -109,21 +150,19 @@ export const resolveLayout = (
     node = newNode;
   }
 
-  const matches: Layout[] = [];
-  const urls: string[] = [];
+  const matches: { path: string; file?: string; layout?: Layout }[] = [];
 
   while (node) {
     const { file, layout } = node.value;
 
     if (!layout || !file) break;
 
-    matches.push(layout);
-    urls.push(file);
+    matches.push(node.value);
 
     node = node.parent;
   }
 
-  return { layouts: matches.filter(Boolean), urls: urls.filter(Boolean) };
+  return matches;
 };
 
 const initResponse = ({

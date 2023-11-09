@@ -25,7 +25,7 @@ program.command("benchmark").action(async () => {
   const finish = performance.now();
 
   console.log(
-    `⏲️ RRendering all paths and methods took: ${finish - time} miliseconds`,
+    `⏲️ Rendering all paths and methods took: ${finish - time} miliseconds`,
   );
 });
 

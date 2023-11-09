@@ -1,5 +1,3 @@
-import { parse, join } from "path";
-import { clearCache } from "../router/utils";
 import { findStaticImports, resolvePath } from "mlly";
 
 export function isDefined<T>(value: T | null | undefined): value is T {
@@ -15,7 +13,7 @@ async function getImportsForFile(file: string) {
       imports.map(async (data) => {
         const resolved = await resolvePath(data.specifier, {
           url: file,
-          extensions: [".mjs", ".cjs", ".js", ".json", ".ts", ".tsx"],
+          extensions: [".mjs", ".cjs", ".js", ".json", ".ts", ".tsx", ".css"],
         });
 
         return resolved;
@@ -31,20 +29,11 @@ async function traceImportsRecursive(
   const imports = await getImportsForFile(file);
   if (depth === 0) return imports;
   const recursive = await Promise.all(
-    imports.map(async (i) => traceImportsRecursive(i, depth - 1)),
+    imports.map(async (file) => traceImportsRecursive(file, depth - 1)),
   );
 
   return [...imports, ...recursive.flat()];
 }
 
-export async function traceImports(file: string, limit: number) {
-  const imports = await traceImportsRecursive(file, limit);
-
-  // NOTE: We should probably move this to a more sensible place
-  imports.forEach((file) => clearCache(file));
-
-  return imports.map((file) => {
-    const parsed = parse(file);
-    return join(parsed.dir, parsed.name);
-  });
-}
+export const traceImports = (file: string, limit: number) =>
+  traceImportsRecursive(file, limit);

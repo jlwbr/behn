@@ -27,10 +27,9 @@ function connect() {
       new DOMParser().parseFromString(await data.text(), "text/html"),
     );
 
-    const head = dd.diff(document.head, newDocument.head);
     const body = dd.diff(document.body, newDocument.body);
-    const success =
-      dd.apply(document.head, head) && dd.apply(document.body, body);
+    document.head.innerHTML = newDocument.head.innerHTML;
+    const success = dd.apply(document.body, body);
 
     if (!success) {
       console.warn("HMR Failed, reloading document");

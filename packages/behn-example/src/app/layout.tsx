@@ -2,12 +2,12 @@
 
 import "@kitajs/html/register";
 import type { Layout } from "behn";
+import "../style/main.css";
 
 const App: Layout = ({ children }) => (
   <html lang="en">
     <head>
       <title>Behn example</title>
-      <script src="https://cdn.tailwindcss.com"></script>
     </head>
 
     <body>{children}</body>

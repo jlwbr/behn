@@ -1,4 +1,4 @@
-import { Script, bundle } from "../bundle";
+import { bundle } from "../bundle";
 import chokidar from "chokidar";
 import {
   Layout,
@@ -10,11 +10,12 @@ import {
   resolveLayout,
   urlToParts,
 } from "./utils";
-import { Server } from "bun";
+import { BuildArtifact, Server } from "bun";
 import { cwd } from "process";
 import { parse, join } from "path";
 import debug from "../utils/debug";
 import { Tree } from "../utils/tree";
+import { isDefined } from "../utils/traceImports";
 
 const isComponent = (component: any) => typeof component === "function";
 
@@ -27,13 +28,15 @@ export enum Method {
 }
 
 export class Router {
-  private scripts: Map<string, Script> = new Map();
   public layouts: Tree<{ path: string; file: string; layout: Layout }> =
     new Tree();
   private routesByLayout: Map<string, string[]> = new Map();
   public modules: Map<string, { type: "layout" | "route"; file: string }> =
     new Map();
   private modulesByFile: Map<string, string[]> = new Map();
+  private assetsByFile = new Map<string, BuildArtifact[]>();
+  private assetsByName = new Map<string, BuildArtifact>();
+  private scripts = new Map<string, BuildArtifact>();
   public routes: {
     [pathname: string]: {
       [method in Method]: { component: Page; metadata: Metadata };
@@ -91,11 +94,24 @@ export class Router {
     }
   }
 
+  async addAssets(file: string, buildArtifacts: BuildArtifact[]) {
+    this.assetsByFile.set(file, buildArtifacts);
+    for (const asset of buildArtifacts) {
+      const parsed = parse(asset.path);
+      const name = `${parsed.name}${parsed.ext}`;
+      this.assetsByName.set(name, asset);
+    }
+  }
+
   async addLayout(file: string) {
-    const { url, imports, exports } = await parseFile(this.basePath, file);
+    const { url, imports, exports, assets } = await parseFile(
+      this.basePath,
+      file,
+    );
 
     console.log(`📼 Rendering layout: ${url}`);
     this.updateModules(file, "layout", imports);
+    this.addAssets(file, assets);
 
     if (!exports.default)
       throw new Error(`Layout at ${file} missing default export`);
@@ -114,7 +130,6 @@ export class Router {
       (target) => target.path === layout.path,
     );
 
-    // console.dir(this.layouts, { depth: null });
     const routes = this.routesByLayout.get(file);
     if (!routes) return;
 
@@ -123,25 +138,57 @@ export class Router {
     }
   }
 
-  async addRoute(file: string) {
-    const { url, exports, imports, lastModified } = await parseFile(
+  async addRoute(file: string, reloadLayouts = false) {
+    const { url, exports, imports, lastModified, assets } = await parseFile(
       this.basePath,
       file,
     );
 
+    if (reloadLayouts) {
+      const route = this.routes[url];
+      if (!route) return;
+
+      const layouts = resolveLayout(url, this.layouts);
+
+      for (const layout of layouts) {
+        if (!layout.file) continue;
+
+        await this.addLayout(layout.file);
+      }
+    }
+
     console.log(`📼 Rendering route: ${url}`);
+    debug("Route imports: %o", imports);
 
     this.updateModules(file, "route", imports);
+    this.addAssets(file, assets);
 
     const metadata = (exports.metadata || {}) as Metadata;
-    if (!metadata.scripts) metadata.scripts = new Map();
-    metadata.scripts = new Map([...metadata.scripts, ...this.scripts]);
     metadata.lastModified = this.devMode ? new Date() : lastModified;
 
-    const { urls, layouts } = resolveLayout(url, this.layouts);
+    const layouts = resolveLayout(url, this.layouts);
 
-    metadata.layouts = layouts;
-    for (const url of urls) {
+    metadata.layouts = layouts.map((layout) => layout.layout).filter(isDefined);
+    metadata.assets = this.scripts;
+
+    for (const asset of assets) {
+      const parsed = parse(asset.path);
+      const name = `${parsed.name}${parsed.ext}`;
+      metadata.assets.set(name, asset);
+    }
+
+    for (const layout of layouts) {
+      if (!layout.file) continue;
+      const assets = this.assetsByFile.get(layout.file);
+
+      for (const asset of assets || []) {
+        const parsed = parse(asset.path);
+        const name = `${parsed.name}${parsed.ext}`;
+        metadata.assets.set(name, asset);
+      }
+    }
+
+    for (const url of layouts.map((layout) => layout.path)) {
       const current = this.routesByLayout.get(url);
 
       this.routesByLayout.set(url, [...(current || []), file]);
@@ -199,8 +246,7 @@ export class Router {
       if (!stats?.isFile()) return;
 
       debug("Module file changed", file);
-      const parsed = parse(file);
-      const basefile = this.modules.get(join(parsed.dir, parsed.name));
+      const basefile = this.modules.get(file);
       if (!basefile) return;
       debug("Found base file %s for module %s", basefile.file, file);
 
@@ -208,7 +254,7 @@ export class Router {
         case "layout":
           await this.addLayout(basefile.file);
         case "route":
-          await this.addRoute(basefile.file);
+          await this.addRoute(basefile.file, true);
       }
 
       this.notifyHMR();
@@ -254,7 +300,7 @@ export class Router {
   }
 
   async match(url: URL, request: Request) {
-    if (url.pathname.startsWith("/.htmx")) return this.handleDotHtmx(url);
+    if (url.pathname.startsWith("/.behn")) return this.handleDotBehn(url);
 
     if (!this.routes[url.pathname])
       return new Response("NOT_FOUND", { status: 404 });
@@ -268,14 +314,18 @@ export class Router {
     return renderRoute(route, request);
   }
 
-  async handleDotHtmx(url: URL) {
-    if (url.pathname.startsWith("/.htmx/scripts")) {
-      const script = this.scripts.get(url.pathname);
-      if (!script) return new Response("NOT_FOUND", { status: 404 });
+  async handleDotBehn(url: URL) {
+    const path = url.pathname.slice(7);
+    console.log(`🔎 Got new request for .behn/${path}`);
+    if (path.startsWith("assets")) {
+      const asset =
+        this.assetsByName.get(path.slice(7)) || this.scripts.get(path.slice(7));
 
-      return new Response(script.data.stream(), {
+      if (!asset) return new Response("NOT_FOUND", { status: 404 });
+
+      return new Response(asset.stream(), {
         headers: {
-          "Content-Type": script.data.type,
+          "Content-Type": asset.type,
         },
       });
     }

@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { TodoList } from "../components/todo-list";
 
 export const metadata = {
-  title: "TODO",
+  title: "NOOOOO",
 };
 
 export const get: Page = async () => {
